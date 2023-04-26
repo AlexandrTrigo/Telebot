@@ -1,0 +1,71 @@
+import telebot
+from telebot import types
+
+from config import *
+from extensions import Converter, APIException
+import traceback
+#import time
+
+
+
+bot = telebot.TeleBot(TOKEN)
+
+
+
+# Обрабатываются все сообщения, содержащие команды '/start' or '/help'.
+@bot.message_handler(commands=['start'])
+def command_start(message: telebot.types.Message):
+    bot.reply_to(message, f"<b>Этот бот поможет тебе узнать нынешний курс трех выбранных валют.</b> "
+                          f"\nНапиши /help, {message.from_user.first_name}", parse_mode="html")
+#    bot.send_message(message.chat.id, "Чем помочь?", parse_mode='html')
+
+# Для завершения программы командой /stop
+@bot.message_handler(commands=['stop'])
+def stop_command(message):
+    bot.reply_to(message, f"Прощай {message.from_user.first_name}")
+
+@bot.message_handler(commands=['help'])
+def command_help(message: telebot.types.Message):
+    bot.reply_to(message, f"Чтобы начать работу введите команду боту в следующем формате:\n<имя валюты> \
+<в какую валюту надо перевести>\
+<количество первой валюты>\Например: доллар рубль 10\nУвидеть список всех доступных валют: /values")
+    text = "\nТак же можно остановить бота командой /stop"
+    bot.send_message(message.chat.id, text)
+@bot.message_handler(commands=['values'])
+def command_values(message: telebot.types.Message):
+    text = 'Доступные валюты:'
+    for key in keys.keys():
+        text = '\n'.join((text, key, ))
+    bot.reply_to(message, text)
+
+
+
+def amount_handler(message: telebot.types.Message, base, sym):
+    amount = message.text.strip()
+    try:
+        new_price = Converter.get_price(base, sym, amount)
+    except APIException as e:
+        bot.send_message(message.chat.id, f'Ошибка конвертации: \n{e}')
+    else:
+        text = f'Цена {amount} {base} в {sym} : {new_price}'
+        bot.send_message(message.chat.id, text)
+
+@bot.message_handler(content_types=['text'])
+def converter(message: telebot.types.Message):
+    commands = message.text.split(' ')
+    try:
+        if len(commands) != 3:
+            raise APIException('Неверное количество параметров!')
+
+        answer = Converter.get_price(*commands)
+    except APIException as e:
+        bot.reply_to(message, f"Ошибка в команде:\n{e}")
+    except Exception as e:
+        traceback.print_tb(e.__traceback__)
+        bot.reply_to(message, f"Неизвестная ошибка:\n{e}")
+    else:
+        bot.reply_to(message, answer)
+
+
+
+bot.polling(none_stop=True)
